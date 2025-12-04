@@ -1,0 +1,130 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# --- Configuration ---
+# Simulation parameters
+TIME_STEP = 0.1  # Time slice for each step (seconds)
+TOTAL_TIME = 10.0 # Total simulation duration (seconds)
+GRAVITY = 9.8    # Standard acceleration due to gravity (m/s^2)
+
+class FlyingObject:
+    """
+    Represents an object in a 2D space affected by forces like gravity and thrust.
+    """
+    def __init__(self, start_x, start_y, mass=1.0):
+        # State variables
+        self.position = np.array([start_x, start_y], dtype=float)
+        self.velocity = np.array([0.0, 0.0], dtype=float)
+        self.acceleration = np.array([0.0, 0.0], dtype=float)
+        self.mass = mass
+
+        # History for plotting
+        self.history = [self.position.copy()]
+
+    def apply_force(self, force):
+        """Adds a force vector (thrust, wind, etc.) to the object's total acceleration."""
+        # F = ma, so a = F/m
+        self.acceleration += force / self.mass
+
+    def apply_gravity(self):
+        """Applies a constant downward force (gravity)."""
+        # Gravity acts only on the Y-axis (downward)
+        gravity_force = np.array([0, -self.mass * GRAVITY])
+        self.apply_force(gravity_force)
+
+    def update(self, dt):
+        """
+        Calculates the new position and velocity based on elapsed time (dt).
+        This uses basic kinematic equations (Euler integration).
+        """
+        # 1. Update velocity: v_new = v_old + a * dt
+        self.velocity += self.acceleration * dt
+
+        # 2. Update position: p_new = p_old + v_new * dt
+        # Note: We use the newly calculated velocity for slightly better integration (semi-implicit Euler)
+        self.position += self.velocity * dt
+
+        # 3. Handle Ground Collision (simple check)
+        if self.position[1] < 0:
+            self.position[1] = 0  # Rest on the ground
+            self.velocity[1] = 0  # Stop vertical movement
+            # We don't reset velocity[0] for horizontal sliding
+
+        # 4. Store and reset
+        self.history.append(self.position.copy())
+        # Reset acceleration for the next time step, as forces need to be applied again
+        self.acceleration = np.zeros(2)
+
+
+def simulate_flight(obj, total_time, dt):
+    """Runs the simulation loop and applies user actions."""
+    num_steps = int(total_time / dt)
+
+    print(f"Starting simulation for {total_time} seconds ({num_steps} steps)...")
+
+    for i in range(num_steps):
+        # Always apply gravity first
+        obj.apply_gravity()
+
+        # --- USER INPUT / THRUST LOGIC ---
+        # This is where you define when and how the 'pilot' applies thrust.
+
+        # Example 1: A brief burst of upward thrust at the start
+        if i == 0:
+            thrust_force = np.array([100.0, 300.0]) # Strong thrust up and slightly forward
+            obj.apply_force(thrust_force)
+            print("Action: Initial launch thrust applied.")
+
+        # Example 2: Continuous gentle forward thrust between 3 and 6 seconds
+        time_elapsed = i * dt
+        if 3.0 <= time_elapsed < 6.0:
+            # We'll apply a smaller, constant horizontal thrust
+            constant_thrust = np.array([50.0, 0.0])
+            obj.apply_force(constant_thrust)
+            # print(f"Time {time_elapsed:.1f}: Applying forward thrust.")
+
+
+        # Update the object's state
+        obj.update(dt)
+
+        # Stop if the object has landed
+        if obj.position[1] == 0 and obj.velocity[1] == 0 and time_elapsed > 1:
+            # We check time_elapsed > 1 to avoid stopping immediately at step 0 if starting at y=0
+            print(f"Landed at time {time_elapsed:.1f}s.")
+            break
+
+    print("Simulation finished.")
+
+
+def plot_results(obj):
+    """Plots the object's trajectory."""
+    history = np.array(obj.history)
+    plt.figure(figsize=(10, 6))
+    plt.plot(history[:, 0], history[:, 1], 'r-', label='Flight Path')
+    plt.plot(history[-1, 0], history[-1, 1], 'o', color='blue', markersize=8, label='Final Position')
+
+    # Draw the initial position
+    plt.plot(obj.history[0][0], obj.history[0][1], '^', color='green', markersize=10, label='Start Position')
+
+    # Set up the plot appearance
+    plt.title('2D Flying Mechanic Simulation (Gravity + Thrust)', fontsize=14)
+    plt.xlabel('Horizontal Distance (x meters)', fontsize=12)
+    plt.ylabel('Height (y meters)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.axhline(0, color='gray', linestyle='-', linewidth=2, label='Ground Level')
+    plt.ylim(-1, np.max(history[:, 1]) * 1.1 + 1) # Ensure the ground is visible
+    plt.xlim(0, np.max(history[:, 0]) * 1.1 + 1)
+    plt.legend()
+    plt.gca().set_aspect('equal', adjustable='box') # Make meters look like squares
+    plt.show()
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    # Create the object (starting at x=1, y=1, with mass 5 kg)
+    ship = FlyingObject(start_x=1, start_y=1, mass=5.0)
+
+    # Run the simulation
+    simulate_flight(ship, TOTAL_TIME, TIME_STEP)
+
+    # Show the results
+    plot_results(ship)
